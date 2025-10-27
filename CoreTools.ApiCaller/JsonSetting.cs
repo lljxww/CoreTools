@@ -1,10 +1,47 @@
 ﻿using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace CoreTools.DB;
+namespace CoreTools.ApiCaller;
 
-public class FlexibleDateTimeConverter : JsonConverter<DateTime>
+internal class JsonSetting
+{
+    private static readonly JsonSerializerOptions _default = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        WriteIndented = false,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = {
+            new FlexibleDateTimeConverter()
+        }
+    };
+
+    private static readonly JsonSerializerOptions _camelCase = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        WriteIndented = false,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = {
+            new FlexibleDateTimeConverter()
+        }
+    };
+
+    public static JsonSerializerOptions DEFAULT_SERIALIZER_OPTION { get; } = _default;
+
+    public static JsonSerializerOptions CAMEL_CASE_POLICY_OPTION { get; } = _camelCase;
+}
+
+internal class FlexibleDateTimeConverter : JsonConverter<DateTime>
 {
     private static readonly string[] Formats =
     [
@@ -48,3 +85,4 @@ public class FlexibleDateTimeConverter : JsonConverter<DateTime>
         writer.WriteStringValue(value.ToString("yyyy-MM-dd HH:mm:ss"));
     }
 }
+

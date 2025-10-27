@@ -4,11 +4,18 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+    <Title>CoreTools.DB</Title>
+    <Company>liangjw</Company>
+    <Description>使用SqlSugar对原KNet.Data.Entity ORM操作的模仿和封装.</Description>
+    <RepositoryUrl>https://github.com/lljxww/CoreTools</RepositoryUrl>
+    <Version>1.0.2</Version>
+    <Authors>liangjw</Authors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
-    <PackageReference Include="SqlSugarCore" Version="5.1.4.206" />
+    <PackageReference Include="SqlSugarCoreNoDrive" Version="5.1.4.206" />
   </ItemGroup>
 
 </Project>

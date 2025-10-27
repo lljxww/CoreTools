@@ -1,7 +1,7 @@
-﻿using SixLabors.ImageSharp;
-using SqlSugar;
-using System.Data;
+﻿using System.Data;
 using System.Linq.Expressions;
+using SixLabors.ImageSharp;
+using SqlSugar;
 using DbType = SqlSugar.DbType;
 
 namespace CoreTools.DB;
@@ -39,7 +39,7 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
         {
             db.Aop.OnLogExecuting = (sql, pars) =>
             {
-                string sqlStr = $@"
+                var sqlStr = $@"
 ===========================================================
 |> TIME: {DateTime.Now:yyyy/MM/dd HH:mm:ss}
 |> SQL: {sql}
@@ -58,14 +58,13 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
 
         }
 
-
         return db;
     }
 
     #region Insert
     public bool Insert<T>(T item) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
         item = Clone(item);
         return db.Insertable(item).ExecuteCommand() > 0;
     }
@@ -74,9 +73,9 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
     #region Delete
     public bool Delete<T>(Expression<Func<T, bool>> whereExpression) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
 
-        int affectedRows = db.Deleteable<T>()
+        var affectedRows = db.Deleteable<T>()
                              .Where(whereExpression)
                              .ExecuteCommand();
 
@@ -85,8 +84,8 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
 
     public bool Delete<T>(T entity) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
-        int affectedRows = db.Deleteable(entity).ExecuteCommand();
+        using var db = GetDb();
+        var affectedRows = db.Deleteable(entity).ExecuteCommand();
         return affectedRows > 0;
     }
     #endregion
@@ -94,7 +93,7 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
     #region Update
     public bool Update<T>(T item) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
         item = Clone(item);
         return db.Updateable(item).ExecuteCommand() > 0;
     }
@@ -102,9 +101,9 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
     public bool Update<T>(Expression<Func<T, T>> updateExpression,
         Expression<Func<T, bool>> whereExpression) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
 
-        int affectedRows = db.Updateable<T>()
+        var affectedRows = db.Updateable<T>()
                              .SetColumns(updateExpression)
                              .Where(whereExpression)
                              .ExecuteCommand();
@@ -116,15 +115,15 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
     #region Get
     public T? Get<T>(Expression<Func<T, bool>>? whereExpression = null) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
-        ISugarQueryable<T> query = db.Queryable<T>();
+        using var db = GetDb();
+        var query = db.Queryable<T>();
 
         if (whereExpression != null)
         {
             query = query.Where(whereExpression);
         }
 
-        List<T> list = query.Take(1).ToList(); // 取第一条
+        var list = query.Take(1).ToList(); // 取第一条
         return list.Count > 0 ? list[0] : null;
     }
 
@@ -135,9 +134,9 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
         int top = 0,
         string? tableName = null) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
 
-        ISugarQueryable<T> query = string.IsNullOrWhiteSpace(tableName) ? db.Queryable<T>() : db.Queryable<T>().AS(tableName);
+        var query = string.IsNullOrWhiteSpace(tableName) ? db.Queryable<T>() : db.Queryable<T>().AS(tableName);
 
         if (whereExpression != null)
         {
@@ -167,9 +166,9 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
         int take = 0,
         string? tableName = null) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
 
-        ISugarQueryable<T> query = string.IsNullOrWhiteSpace(tableName) ? db.Queryable<T>() : db.Queryable<T>().AS(tableName);
+        var query = string.IsNullOrWhiteSpace(tableName) ? db.Queryable<T>() : db.Queryable<T>().AS(tableName);
 
         if (whereExpression != null)
         {
@@ -203,9 +202,9 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
         out int total,
         string? tableName = null) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
 
-        ISugarQueryable<T> query = string.IsNullOrWhiteSpace(tableName)
+        var query = string.IsNullOrWhiteSpace(tableName)
             ? db.Queryable<T>()
             : db.Queryable<T>().AS(tableName);
 
@@ -231,25 +230,25 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
 
     public bool Exists<T>(Expression<Func<T, bool>> whereExpression) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
         return db.Queryable<T>().Any(whereExpression);
     }
 
     public int Count(string sql, params SugarParameter[] parameters)
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
 
         // SqlSugar 提供 Ado 对象执行原生 SQL
-        DataTable result = db.Ado.GetDataTable(sql, parameters);
+        var result = db.Ado.GetDataTable(sql, parameters);
 
         return result.Rows.Count > 0 ? Convert.ToInt32(result.Rows[0][0]) : 0;
     }
 
     public int Count<T>(Expression<Func<T, bool>>? whereExpression = null) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
 
-        ISugarQueryable<T> query = db.Queryable<T>();
+        var query = db.Queryable<T>();
 
         if (whereExpression != null)
         {
@@ -271,15 +270,15 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
     /// <returns>实体列表</returns>
     public List<T> Execute<T>(string sql, params SugarParameter[] parameters) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
-        List<T> result = db.Ado.SqlQuery<T>(sql, parameters);
+        using var db = GetDb();
+        var result = db.Ado.SqlQuery<T>(sql, parameters);
 
         return result;
     }
 
     public int ExecuteNonQuery(string sql, params SugarParameter[] parameters)
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
         return db.Ado.ExecuteCommand(sql, parameters);
     }
 
@@ -287,7 +286,7 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
         string sql,
         params SugarParameter[] parameters) where T : class, new()
     {
-        using SqlSugarClient db = GetDb();
+        using var db = GetDb();
         return db.Ado.SqlQuery<T>(sql, parameters);
     }
     #endregion

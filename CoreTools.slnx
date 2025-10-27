@@ -1,3 +1,8 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
+  <Project Path="CoreTools.ApiCaller/CoreTools.ApiCaller.csproj"
+    Id="b7a80c81-dbb3-4565-8ec2-4a0912ed0ae9" />
   <Project Path="CoreTools.DB/CoreTools.DB.csproj" />
 </Solution>
