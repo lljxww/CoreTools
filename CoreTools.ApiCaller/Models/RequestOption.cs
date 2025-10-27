@@ -37,13 +37,15 @@ public class RequestOption
     /// </summary>
     public string? CustomAuthorizeInfo { get; set; }
 
+    private int _timeout = 40000;
+
     /// <summary>
     /// 超时时长（ms），超过此时间的请求将取消
     /// </summary>
     public int Timeout
     {
-        get => field;
-        set => field = value <= 0 ? 40000 : value;
+        get => _timeout;
+        set => _timeout = value <= 0 ? 40000 : value;
     }
 
     /// <summary>
