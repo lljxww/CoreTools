@@ -6,106 +6,17 @@ namespace CoreTools.ApiCaller.Models;
 /// <summary>
 /// ApiCaller接口返回结果包装类（System.Text.Json版本）
 /// </summary>
-[Serializable]
-public class ApiResult
+public class ApiResult : IDisposable
 {
     private bool isSet = false;
-    private bool success = false;
-
-    /// <summary>
-    /// 执行结果(试用,实际情况以RawStr自行判断)
-    /// </summary>
-    public bool Success
-    {
-        get
-        {
-            if (isSet)
-            {
-                return success;
-            }
-
-            try
-            {
-                return Convert.ToBoolean(this[nameof(Success)]);
-            }
-            catch
-            {
-                try
-                {
-                    return Convert.ToBoolean(this["IsSuccess"]);
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-        }
-        set
-        {
-            success = value;
-            isSet = true;
-        }
-    }
-
+    private bool success;
+    private int? code;
+    private string message = string.Empty;
     private string rawStr = string.Empty;
 
-    /// <summary>
-    /// 接口的原始返回结果
-    /// </summary>
-    public string RawStr
-    {
-        get => rawStr;
-        set
-        {
-            try
-            {
-                JsonObject = JsonDocument.Parse(value);
-            }
-            catch
-            {
-                JsonObject = default;
-            }
+    private JsonDocument? jsonObject;
 
-            rawStr = value;
-        }
-    }
-
-    private string message = string.Empty;
-
-    /// <summary>
-    /// 执行信息
-    /// </summary>
-    public string Message
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(message))
-            {
-                try
-                {
-                    return this[nameof(Message)];
-                }
-                catch
-                {
-                    return string.Empty;
-                }
-            }
-            else
-            {
-                return message;
-            }
-        }
-        set => message = value;
-    }
-
-    public int Code
-    {
-        get
-        {
-            var codeStr = this[nameof(Code)];
-            return string.IsNullOrWhiteSpace(codeStr) ? -1 : int.Parse(codeStr);
-        }
-    }
+    public ApiResult() { }
 
     public ApiResult(string resultStr)
     {
@@ -116,89 +27,146 @@ public class ApiResult
     {
         this.success = success;
         this.message = message;
-    }
-
-    public ApiResult()
-    {
-    }
-
-    [NonSerialized]
-    public JsonDocument? JsonObject;
-
-    private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement child)
-    {
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var prop in element.EnumerateObject())
-            {
-                if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
-                {
-                    child = prop.Value;
-                    return true;
-                }
-            }
-        }
-
-        child = default;
-        return false;
+        this.isSet = true;
     }
 
     /// <summary>
-    /// 返回结果索引器
+    /// 执行结果
+    /// </summary>
+    public bool Success
+    {
+        get
+        {
+            if (!isSet)
+            {
+                success = TryGetValueAsBool(nameof(Success))
+                       || TryGetValueAsBool("IsSuccess");
+                isSet = true;
+            }
+
+            return success;
+        }
+        set
+        {
+            success = value;
+            isSet = true;
+        }
+    }
+
+    /// <summary>
+    /// 接口原始返回字符串
+    /// </summary>
+    public string RawStr
+    {
+        get => rawStr;
+        set
+        {
+            rawStr = value;
+            jsonObject?.Dispose();
+            jsonObject = null;
+            isSet = false;
+            code = null;
+            message = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// 执行信息
+    /// </summary>
+    public string Message
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                message = this[nameof(Message)] ?? string.Empty;
+            }
+
+            return message;
+        }
+        set => message = value;
+    }
+
+    /// <summary>
+    /// 返回状态码，默认 -1
+    /// </summary>
+    public int Code
+    {
+        get
+        {
+            if (!code.HasValue)
+            {
+                var codeStr = this[nameof(Code)];
+                code = int.TryParse(codeStr, out var c) ? c : -1;
+            }
+
+            return code.Value;
+        }
+    }
+
+    /// <summary>
+    /// JsonDocument 对象（延迟解析）
+    /// </summary>
+    public JsonDocument JsonObject => jsonObject ??= JsonDocument.Parse(rawStr);
+
+    /// <summary>
+    /// 索引器，支持深层属性访问，忽略大小写
     /// </summary>
     public string this[string propertyName]
     {
         get
         {
-            try
-            {
-                JsonObject ??= JsonDocument.Parse(rawStr);
-
-                var parts = propertyName.Split('.');
-                var element = JsonObject.RootElement;
-
-                foreach (var part in parts)
-                {
-                    if (TryGetPropertyIgnoreCase(element, part, out var child))
-                    {
-                        element = child;
-                    }
-                    else
-                    {
-                        return string.Empty;
-                    }
-                }
-
-                return element.ValueKind switch
-                {
-                    JsonValueKind.String => element.GetString(),
-                    JsonValueKind.Number => element.GetRawText(),
-                    JsonValueKind.True => "true",
-                    JsonValueKind.False => "false",
-                    _ => element.GetRawText()
-                } ?? string.Empty;
-            }
-            catch
+            if (string.IsNullOrWhiteSpace(propertyName) || string.IsNullOrWhiteSpace(rawStr))
             {
                 return string.Empty;
             }
+
+            var parts = propertyName.Split('.');
+            var element = JsonObject.RootElement;
+
+            foreach (var part in parts)
+            {
+                if (!TryGetPropertyIgnoreCase(element, part, out var child))
+                {
+                    return string.Empty;
+                }
+
+                element = child;
+            }
+
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString() ?? string.Empty,
+                JsonValueKind.Number => element.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => element.GetRawText()
+            };
         }
     }
 
+    /// <summary>
+    /// 获取指定属性并转换类型，失败返回 defaultValue
+    /// </summary>
     public T? GetValue<T>(string propertyName, T? defaultValue = default)
     {
         var value = this[propertyName];
-        return TryConvert<T>(value, out var result) ? result : defaultValue;
+        return TryConvert(value, out T? result) ? result : defaultValue;
     }
 
     /// <summary>
-    /// 将Result的原始字符串反序列化为指定的格式
+    /// 将原始结果反序列化为指定类型
     /// </summary>
     public T? TryConvert<T>(T? defaultValue = default)
     {
+        if (string.IsNullOrWhiteSpace(rawStr))
+        {
+            return defaultValue;
+        }
+
         try
         {
-            return JsonSerializer.Deserialize<T>(RawStr, JsonSetting.DEFAULT_SERIALIZER_OPTION);
+            return JsonSerializer.Deserialize<T>(rawStr, JsonSetting.DEFAULT_SERIALIZER_OPTION);
         }
         catch
         {
@@ -207,70 +175,116 @@ public class ApiResult
     }
 
     /// <summary>
-    /// 使用对象构建ApiResult实例
+    /// 使用对象构建 ApiResult
     /// </summary>
     public static ApiResult Build(object obj)
     {
         return new ApiResult(JsonSerializer.Serialize(obj, JsonSetting.DEFAULT_SERIALIZER_OPTION));
     }
 
+    /// <summary>
+    /// 尝试类型转换
+    /// </summary>
     private static bool TryConvert<T>(string input, out T result)
     {
-        try
+        result = default!;
+        if (string.IsNullOrWhiteSpace(input))
         {
-            if (string.IsNullOrWhiteSpace(input))
+            return false;
+        }
+
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+
+        if (targetType.IsEnum)
+        {
+            if (Enum.TryParse(targetType, input, true, out var enumVal))
             {
-                result = default!;
-                return false;
-            }
-
-            var targetType = typeof(T);
-
-            // 如果是 Nullable<T>，取里面的实际类型
-            var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-            // 特殊处理枚举
-            if (underlyingType.IsEnum)
-            {
-                if (Enum.TryParse(underlyingType, input, true, out var enumValue))
-                {
-                    result = (T)enumValue;
-                    return true;
-                }
-
-                result = default!;
-                return false;
-            }
-
-            // 特殊处理 Guid
-            if (underlyingType == typeof(Guid))
-            {
-                if (Guid.TryParse(input, out var guidValue))
-                {
-                    result = (T)(object)guidValue;
-                    return true;
-                }
-
-                result = default!;
-                return false;
-            }
-
-            // 尝试用 TypeConverter
-            var converter = TypeDescriptor.GetConverter(underlyingType);
-            if (converter != null && converter.IsValid(input))
-            {
-                result = (T)converter.ConvertFromString(input)!;
+                result = (T)enumVal;
                 return true;
             }
 
-            // 最后尝试 ChangeType
-            result = (T)Convert.ChangeType(input, underlyingType);
+            return false;
+        }
+
+        if (targetType == typeof(Guid))
+        {
+            if (Guid.TryParse(input, out var guidVal))
+            {
+                result = (T)(object)guidVal;
+                return true;
+            }
+
+            return false;
+        }
+
+        var converter = TypeDescriptor.GetConverter(targetType);
+        if (converter != null && converter.IsValid(input))
+        {
+            result = (T)converter.ConvertFromString(input)!;
+            return true;
+        }
+
+        try
+        {
+            result = (T)Convert.ChangeType(input, targetType);
             return true;
         }
         catch
         {
-            result = default!;
             return false;
         }
+    }
+
+    /// <summary>
+    /// 尝试获取 JsonElement 属性（忽略大小写）
+    /// </summary>
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement child)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            child = default;
+            return false;
+        }
+
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                child = prop.Value;
+                return true;
+            }
+        }
+
+        child = default;
+        return false;
+    }
+
+    /// <summary>
+    /// 尝试解析 bool
+    /// </summary>
+    private bool TryGetValueAsBool(string propertyName)
+    {
+        var str = this[propertyName];
+        if (bool.TryParse(str, out var val))
+        {
+            return val;
+        }
+
+        if (int.TryParse(str, out var intVal))
+        {
+            return intVal != 0;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 释放 JsonDocument
+    /// </summary>
+    public void Dispose()
+    {
+        jsonObject?.Dispose();
+        jsonObject = null;
+        GC.SuppressFinalize(this);
     }
 }

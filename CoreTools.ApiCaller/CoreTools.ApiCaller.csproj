@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <Title>CoreTools.ApiCaller</Title>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Company>liangjw</Company>
     <Authors>liangjw</Authors>
     <RepositoryUrl>https://github.com/lljxww/CoreTools</RepositoryUrl>
