@@ -105,9 +105,42 @@ public class ApiResult : IDisposable
     }
 
     /// <summary>
-    /// JsonDocument 对象（延迟解析）
+    /// JsonDocument 对象（延迟解析，非法 JSON 时返回 null）
     /// </summary>
-    public JsonDocument JsonObject => jsonObject ??= JsonDocument.Parse(rawStr);
+    public JsonDocument? JsonObject
+    {
+        get
+        {
+            if (jsonObject != null)
+            {
+                return jsonObject;
+            }
+
+            if (string.IsNullOrWhiteSpace(rawStr))
+            {
+                return null;
+            }
+
+            try
+            {
+                jsonObject = JsonDocument.Parse(rawStr, new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip
+                });
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+
+            return jsonObject;
+        }
+    }
 
     /// <summary>
     /// 索引器，支持深层属性访问，忽略大小写
@@ -122,7 +155,12 @@ public class ApiResult : IDisposable
             }
 
             var parts = propertyName.Split('.');
-            var element = JsonObject.RootElement;
+            var element = JsonObject?.RootElement ?? default;
+
+            if (element.ValueKind == JsonValueKind.Undefined)
+            {
+                return string.Empty;
+            }
 
             foreach (var part in parts)
             {
