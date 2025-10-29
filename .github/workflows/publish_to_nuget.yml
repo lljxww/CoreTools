@@ -23,8 +23,5 @@ jobs:
       - name: Build
         run: dotnet build --no-restore
 
-      - name: Publish-CoreTools.DB
-        run: dotnet pack -c Release -o . CoreTools.DB/CoreTools.DB.csproj && dotnet nuget push *.nupkg -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json --skip-duplicate
-
-      - name: Publish-CoreTools.ApiCaller
-        run: dotnet pack -c Release -o . CoreTools.ApiCaller/CoreTools.ApiCaller.csproj && dotnet nuget push *.nupkg -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Publish NuGet Packages
+        run: dotnet pack -c Release -o . CoreTools.DB/CoreTools.DB.csproj && dotnet pack -c Release -o . CoreTools.ApiCaller/CoreTools.ApiCaller.csproj && dotnet nuget push *.nupkg -k ${{secrets.NUGET_API_KEY}} -s https://api.nuget.org/v3/index.json --skip-duplicate
