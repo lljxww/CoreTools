@@ -120,10 +120,31 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
 
         if (whereExpression != null)
         {
-            query = query.Where(whereExpression);
+            // 针对简单的 BinaryExpression: Field == "NULL" 或 "null" 等
+            if (whereExpression.Body is BinaryExpression binaryExp &&
+                binaryExp.NodeType == ExpressionType.Equal)
+            {
+                if (binaryExp.Left is MemberExpression memberExp &&
+                    binaryExp.Right is ConstantExpression constExp &&
+                    constExp.Value is string strValue &&
+                    string.Equals(strValue, "NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    // 使用原生参数化 SQL 避免 ORM 转换
+                    var fieldName = memberExp.Member.Name;
+                    query = query.Where($"{fieldName}=@val", new { val = strValue });
+                }
+                else
+                {
+                    query = query.Where(whereExpression);
+                }
+            }
+            else
+            {
+                query = query.Where(whereExpression);
+            }
         }
 
-        var list = query.Take(1).ToList(); // 取第一条
+        var list = query.Take(1).ToList();
         return list.Count > 0 ? list[0] : null;
     }
 
