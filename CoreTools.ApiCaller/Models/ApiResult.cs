@@ -178,6 +178,7 @@ public class ApiResult : IDisposable
                 JsonValueKind.Number => element.GetRawText(),
                 JsonValueKind.True => "true",
                 JsonValueKind.False => "false",
+                JsonValueKind.Null => string.Empty,
                 _ => element.GetRawText()
             };
         }
