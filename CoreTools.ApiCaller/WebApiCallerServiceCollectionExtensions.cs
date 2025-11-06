@@ -1,5 +1,4 @@
 ﻿using CoreTools.ApiCaller.Models.Config;
-using CoreTools.ApiCaller.Utilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,10 +21,6 @@ public static class WebApiCallerServiceCollectionExtensions
             c.DefaultRequestHeaders.Add("User-Agent", "WebApiCaller");
             c.DefaultRequestHeaders.Connection.Add("keep-alive");
         });
-
-        // 构建一次 ServiceProvider 并初始化静态类
-        var sp = services.BuildServiceProvider();
-        HttpClientInstance.Initialize(sp.GetRequiredService<IHttpClientFactory>());
 
         return services;
     }
