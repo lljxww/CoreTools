@@ -1,13 +1,45 @@
 ﻿using System.Reflection;
 using CoreTools.ApiCaller.Models;
+using CoreTools.ApiCaller.Models.Config;
+using CoreTools.ApiCaller.Utilities;
 
 namespace CoreTools.ApiCaller;
 
 public static partial class WebApiCaller
 {
+    private static readonly Lock _lock = new();
+
+    public static void InitCaller(string envName,
+        ApiCallerConfig apiCallerConfig,
+        IHttpClientFactory httpClientFactory)
+    {
+        if (Inited)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            if (Inited)
+            {
+                return;
+            }
+
+            CallerOptions.Init(apiCallerConfig);
+            HttpClientInstance.Initialize(httpClientFactory);
+
+            Inited = true;
+        }
+    }
+
     public static async Task<ApiResult> InvokeAsync(string apiNameAndMethodName,
         object? requestParam = null, RequestOption? requestOption = null)
     {
+        if (!Inited)
+        {
+            throw new Exception("请先运行WebApiCaller.Init()完成Caller的初始化工作!");
+        }
+
         // 创建请求对象
         var context = CallerContext.Build(apiNameAndMethodName, requestParam, requestOption ?? new RequestOption());
 
