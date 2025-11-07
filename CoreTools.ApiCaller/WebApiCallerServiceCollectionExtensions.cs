@@ -1,4 +1,5 @@
-﻿using CoreTools.ApiCaller.Models.Config;
+﻿using CoreTools.ApiCaller.Models;
+using CoreTools.ApiCaller.Models.Config;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,6 +10,8 @@ public static class WebApiCallerServiceCollectionExtensions
     public static IServiceCollection ConfigureWebApiCaller(this IServiceCollection services,
         string runEnv, string fileName = "apicaller.json")
     {
+        CallerOption.RunEnv = runEnv;
+
         var fileNamePart = fileName.Split('.');
         var envFileName = $"{fileNamePart[0]}.{runEnv}.{fileNamePart[1]}";
 
@@ -18,6 +21,9 @@ public static class WebApiCallerServiceCollectionExtensions
             .Build();
 
         services.Configure<ApiCallerConfig>(configuration);
+
+        Console.WriteLine($"[Caller] 已加载配置文件: {fileName}");
+        Console.WriteLine($"[Caller] 已加载配置文件: {envFileName}");
 
         _ = services.AddHttpClient("WebApiCaller", c =>
         {

@@ -4,6 +4,8 @@ namespace CoreTools.ApiCaller.Models;
 
 public static class CallerOption
 {
+    internal static string RunEnv { get; set; } = string.Empty;
+
     internal static readonly Dictionary<string, Func<CallerContext, CallerContext>> AuthorizeFuncs = [];
 
     public static void RegisterAuthorizers(Type callerType)
