@@ -9,7 +9,7 @@
     <Company>liangjw</Company>
     <Description>使用SqlSugar对原KNet.Data.Entity ORM操作的模仿和封装.</Description>
     <RepositoryUrl>https://github.com/lljxww/CoreTools</RepositoryUrl>
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <Authors>liangjw</Authors>
   </PropertyGroup>
 

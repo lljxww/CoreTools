@@ -76,7 +76,6 @@ public class WebApiCaller(IOptions<ApiCallerConfig> config, IHttpClientFactory f
 
         if (string.Equals(CallerOption.RunEnv, "Development"))
         {
-            Console.WriteLine("[Caller] content");
             Console.WriteLine(context.ToString());
         }
 
