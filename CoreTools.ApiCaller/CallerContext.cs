@@ -9,18 +9,17 @@ using CoreTools.ApiCaller.Utilities;
 
 namespace CoreTools.ApiCaller;
 
-public partial class CallerContext
+public class CallerContext
 {
     private CallerContext() { }
 
-    internal async Task<CallerContext> RequestAsync()
+    internal async Task<CallerContext> RequestAsync(HttpClient client)
     {
         ResultFrom = "R";
 
         Stopwatch sw = new();
         try
         {
-            var client = HttpClientInstance.Get();
             using var cts = RequestOption.CreateCancellationSource(Timeout);
 
             sw.Start();
@@ -57,11 +56,12 @@ public partial class CallerContext
     /// <param name="config">配置对象</param>
     /// <param name="param">参数对象</param>
     /// <returns></returns>
-    internal static CallerContext Build(string apiNameAndMethodName,
+    internal static CallerContext Build(ApiCallerConfig config,
+        string apiNameAndMethodName,
         object? param,
         RequestOption requestOption)
     {
-        (var serviceItem, var apiItem) = GetServiceConfigItem(apiNameAndMethodName);
+        (var serviceItem, var apiItem) = GetServiceConfigItem(apiNameAndMethodName, config);
         apiItem.ParamType = apiItem.ParamType.ToLower().Trim();
 
         var paramDic = param?.AsDictionary();
@@ -104,7 +104,7 @@ public partial class CallerContext
             Timeout = timeout
         };
 
-        context = MakeAuthorization(context);
+        context = MakeAuthorization(context, config);
 
         return context;
     }
@@ -115,12 +115,12 @@ public partial class CallerContext
     /// <param name="apiNameAndMethodName">服务名和方法名</param>
     /// <param name="config">Caller请求的配置文件</param>
     /// <returns></returns>
-    private static (ServiceItem, ApiItem) GetServiceConfigItem(string apiNameAndMethodName)
+    private static (ServiceItem, ApiItem) GetServiceConfigItem(string apiNameAndMethodName, ApiCallerConfig config)
     {
         var serviceName = apiNameAndMethodName.Split('.')[0];
         var methodName = apiNameAndMethodName.Split('.')[1];
 
-        var serviceItem = CallerOptions.Config.ServiceItems.Single(a => a.Label.ToLower().Trim() == serviceName.ToLower().Trim());
+        var serviceItem = config.ServiceItems.Single(a => a.Label.ToLower().Trim() == serviceName.ToLower().Trim());
         var apiItem = serviceItem.ApiItems.Single(c => c.Label.ToLower().Trim() == methodName.ToLower().Trim());
 
         return (serviceItem, apiItem);
@@ -258,23 +258,23 @@ public partial class CallerContext
         };
     }
 
-    private static CallerContext MakeAuthorization(CallerContext context)
+    private static CallerContext MakeAuthorization(CallerContext context, ApiCallerConfig config)
     {
-        var hasAuthorizations = CallerOptions.Config.Authorizations != null
-            && CallerOptions.Config.Authorizations.Count > 0;
+        var hasAuthorizations = config.Authorizations != null
+            && config.Authorizations.Count > 0;
 
         // 处理接口授权
         if (!string.IsNullOrWhiteSpace(context.ServiceItem.AuthorizationType))
         {
             var authName = context.ServiceItem.AuthorizationType.Trim();
 
-            if (!WebApiCaller.AuthorizeFuncs.ContainsKey(authName))
+            if (!CallerOption.AuthorizeFuncs.ContainsKey(authName))
             {
                 throw new Exception($"找不到授权配置: {context.ServiceItem.AuthorizationType}");
             }
 
-            context.Authorization = (hasAuthorizations && CallerOptions.Config.Authorizations!.Any(a => a.Name == authName))
-                ? CallerOptions.Config.Authorizations!.Single(a => a.Name == authName)
+            context.Authorization = (hasAuthorizations && config.Authorizations!.Any(a => a.Name == authName))
+                ? config.Authorizations!.Single(a => a.Name == authName)
                 : new Authorization
                 {
                     Name = authName
@@ -285,13 +285,13 @@ public partial class CallerContext
         {
             var authName = context.ApiItem.AuthorizationType.Trim();
 
-            if (!WebApiCaller.AuthorizeFuncs.ContainsKey(authName))
+            if (!CallerOption.AuthorizeFuncs.ContainsKey(authName))
             {
                 throw new Exception($"找不到授权配置: {context.ApiItem.AuthorizationType}");
             }
 
-            context.Authorization = (hasAuthorizations && CallerOptions.Config.Authorizations!.Any(a => a.Name == authName))
-                 ? CallerOptions.Config.Authorizations!.Single(a => a.Name == authName)
+            context.Authorization = (hasAuthorizations && config.Authorizations!.Any(a => a.Name == authName))
+                 ? config.Authorizations!.Single(a => a.Name == authName)
                  : new Authorization
                  {
                      Name = authName
@@ -311,9 +311,140 @@ public partial class CallerContext
 
         if (!string.IsNullOrWhiteSpace(context.Authorization?.Name))
         {
-            context = WebApiCaller.AuthorizeFuncs[context.Authorization.Name].Invoke(context);
+            context = CallerOption.AuthorizeFuncs[context.Authorization.Name].Invoke(context);
         }
 
         return context;
     }
+
+    public override string ToString()
+    {
+        string paramJson;
+        try
+        {
+            var options = ServiceItem.UseCamelCase
+                                ? JsonSetting.CAMEL_CASE_POLICY_OPTION
+                                : JsonSetting.DEFAULT_SERIALIZER_OPTION;
+            paramJson = JsonSerializer.Serialize(OriginParam, options);
+        }
+        catch
+        {
+            paramJson = "[Unserializable Parameter]";
+        }
+
+        string result;
+        try
+        {
+            result = ApiResult?.RawStr ?? "[No Result]";
+        }
+        catch
+        {
+            result = "[Unserializable Result]";
+        }
+
+        return $@"
+-----------------------------------------------------------
+|> TIME: {DateTime.Now:yyyy/MM/dd HH:mm:ss}
+|> METHOD: {ServiceItem.Label}.{ApiItem.Label}
+|> USE CAMEL CASE: {ServiceItem.UseCamelCase}
+|> URL: {HttpMethod} {FinalUrl}
+|> PARAM: {paramJson}
+|> PARAM TYPE: {ApiItem?.ParamType}
+|> RESULT: {result}
+-----------------------------------------------------------";
+    }
+
+    #region Props
+    /// <summary>
+    /// 服务名.方法名
+    /// </summary>
+    public required string ApiName { get; set; }
+
+    public required HttpMethod HttpMethod { get; set; }
+
+    /// <summary>
+    /// 超时时间(计算后)
+    /// </summary>
+    public int Timeout { get; set; } = 40000;
+
+    /// <summary>
+    /// 服务配置节
+    /// </summary>
+    public required ServiceItem ServiceItem { get; set; }
+
+    /// <summary>
+    /// 基础地址
+    /// </summary>
+    public required string BaseUrl { get; set; }
+
+    /// <summary>
+    /// 请求时的特定设置
+    /// </summary>
+    public required RequestOption RequestOption { get; set; }
+
+    /// <summary>
+    /// 认证信息
+    /// </summary>
+    public Authorization? Authorization { get; private set; }
+
+    /// <summary>
+    /// Api配置节
+    /// </summary>
+    public required ApiItem ApiItem { get; set; }
+
+    /// <summary>
+    /// 是否需要缓存(计算后)
+    /// </summary>
+    public required bool NeedCache { get; set; } = false;
+
+    /// <summary>
+    /// 最终的请求地址(计算后)
+    /// </summary>
+    public required string FinalUrl { get; set; }
+
+    /// <summary>
+    /// 请求参数
+    /// </summary>
+    public object? OriginParam { get; private set; }
+
+    /// <summary>
+    /// 请求参数(转换为字典类型后)
+    /// </summary>
+    public Dictionary<string, string>? ParamDic { get; private set; }
+
+    /// <summary>
+    /// 响应结果
+    /// </summary>
+    public string? ResponseContent { get; set; }
+
+    /// <summary>
+    /// 请求执行时间
+    /// </summary>
+    public int Runtime { get; set; } = 0;
+
+    /// <summary>
+    /// 请求结果来源
+    /// </summary>
+    public required string ResultFrom { get; set; } = "R";
+
+    /// <summary>
+    /// 缓存Key
+    /// </summary>
+    public required string CacheKey { get; set; }
+
+    /// <summary>
+    /// 请求结果对象
+    /// </summary>
+    public ApiResult? ApiResult { get; set; }
+
+    /// <summary>
+    /// 请求体
+    /// </summary>
+    public required HttpRequestMessage RequestMessage { get; set; }
+
+    /// <summary>
+    /// 缓存时间(分, 计算后)
+    /// </summary>
+    public int CacheMinuties { get; private set; } = 1;
+    #endregion
 }

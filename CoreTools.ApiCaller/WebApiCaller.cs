@@ -1,47 +1,19 @@
-﻿using System.Reflection;
-using CoreTools.ApiCaller.Models;
+﻿using CoreTools.ApiCaller.Models;
 using CoreTools.ApiCaller.Models.Config;
-using CoreTools.ApiCaller.Utilities;
+using Microsoft.Extensions.Options;
 
 namespace CoreTools.ApiCaller;
 
-public static partial class WebApiCaller
+public class WebApiCaller(IOptions<ApiCallerConfig> config, IHttpClientFactory factory)
 {
-    private static readonly Lock _lock = new();
+    private readonly ApiCallerConfig _config = config.Value;
+    private readonly IHttpClientFactory _factory = factory;
 
-    public static void InitCaller(string envName,
-        ApiCallerConfig apiCallerConfig,
-        IHttpClientFactory httpClientFactory)
-    {
-        if (Inited)
-        {
-            return;
-        }
-
-        lock (_lock)
-        {
-            if (Inited)
-            {
-                return;
-            }
-
-            CallerOptions.Init(apiCallerConfig);
-            HttpClientInstance.Initialize(httpClientFactory);
-
-            Inited = true;
-        }
-    }
-
-    public static async Task<ApiResult> InvokeAsync(string apiNameAndMethodName,
+    public async Task<ApiResult> InvokeAsync(string apiNameAndMethodName,
         object? requestParam = null, RequestOption? requestOption = null)
     {
-        if (!Inited)
-        {
-            throw new Exception("请先运行WebApiCaller.Init()完成Caller的初始化工作!");
-        }
-
         // 创建请求对象
-        var context = CallerContext.Build(apiNameAndMethodName, requestParam, requestOption ?? new RequestOption());
+        var context = CallerContext.Build(_config, apiNameAndMethodName, requestParam, requestOption ?? new RequestOption());
 
         // 尝试从缓存读取结果
         if (context.NeedCache)
@@ -63,7 +35,8 @@ public static partial class WebApiCaller
             try
             {
                 // 执行请求
-                context = await context.RequestAsync();
+                using var _client = _factory.CreateClient("WebApiCaller");
+                context = await context.RequestAsync(_client);
 
                 if (context.ResultFrom == "T") // 检查是否超时
                 {
@@ -109,12 +82,12 @@ public static partial class WebApiCaller
     /// </summary>
     /// <param name="apiNameAndMethodName"></param>
     /// <param name="requestParam"></param>
-    public static void RemoveCache(string apiNameAndMethodName,
+    public void RemoveCache(string apiNameAndMethodName,
         object? requestParam = null,
         string? cacheKeyPart = null)
     {
         // 创建请求对象
-        var context = CallerContext.Build(apiNameAndMethodName, requestParam, new RequestOption
+        var context = CallerContext.Build(_config, apiNameAndMethodName, requestParam, new RequestOption
         {
             CacheKeyPart = cacheKeyPart
         });
@@ -122,114 +95,125 @@ public static partial class WebApiCaller
         RemoveCacheEvent?.Invoke(context);
     }
 
+    #region Events
     /// <summary>
-    /// 自动扫描并注册所有 ICallerAuthorize 实现类
+    /// 设置缓存
     /// </summary>
-    public static void RegisterAuthorizers(string? namespaceStr)
-    {
-        var authorizeTypes = GetAuthorizeTypes(namespaceStr);
+    public delegate void SetCacheHandler(CallerContext context);
+    public static event SetCacheHandler? SetCacheEvent;
 
-        foreach (var type in authorizeTypes)
+    /// <summary>
+    /// 读取缓存
+    /// </summary>
+    public delegate ApiResult GetCacheHandler(CallerContext context);
+    public static event GetCacheHandler? GetCacheEvent;
+
+    /// <summary>
+    /// 清除缓存
+    /// </summary>
+    public delegate void RemoveCacheHandler(CallerContext context);
+    public static event RemoveCacheHandler? RemoveCacheEvent;
+
+    /// <summary>
+    /// 记录日志
+    /// </summary>
+    public delegate void LogHandler(CallerContext context);
+    public static event LogHandler? LogEvent;
+
+    /// <summary>
+    /// 请求方法执行结束后的操作
+    /// </summary>
+    public delegate void OnExecutedHandler(CallerContext context);
+    public static event OnExecutedHandler? OnExecuted;
+
+    /// <summary>
+    /// 执行发生异常时触发
+    /// </summary>
+    public delegate void OnExceptionHandler(CallerContext context, Exception ex);
+    public static event OnExceptionHandler? OnException;
+
+    /// <summary>
+    /// 请求超时时触发
+    /// </summary>
+    public delegate void OnRequestTimeoutHandler(CallerContext context);
+    public static event OnRequestTimeoutHandler? OnRequestTimeout;
+    #endregion
+
+    #region Utils
+    private static void RaiseEvent(MulticastDelegate? eventDelegate, CallerContext context)
+    {
+        var delegates = eventDelegate?.GetInvocationList();
+        if (delegates == null)
+        {
+            return;
+        }
+
+        foreach (var handler in delegates)
         {
             try
             {
-                if (Activator.CreateInstance(type) is not ICallerAuthorize instance)
+                var action = handler.DynamicInvoke(context);
+                if (action is Task task)
                 {
-                    continue;
+                    _ = Task.Run(() => task); // fire-and-forget 异步执行
                 }
-
-                var name = instance.GetAuthorizeName();
-
-                if (string.IsNullOrWhiteSpace(name))
-                {
-                    Console.Error.WriteLine($"[Authorize] 类型 {type.FullName} 返回了空的授权名称，已跳过。");
-                    continue;
-                }
-
-                if (AuthorizeFuncs.ContainsKey(name))
-                {
-                    Console.Error.WriteLine($"[Authorize] 重复的授权名称: {name} 来自 {type.FullName}，已忽略。");
-                    continue;
-                }
-
-                AuthorizeFuncs[name] = instance.Func;
-                Console.WriteLine($"[Authorize] 已注册: {name} -> {type.FullName}");
             }
-            catch (Exception ex)
+            catch
             {
-                Console.Error.WriteLine($"[Authorize] 注册 {type.FullName} 时出错: {ex.Message}");
             }
         }
     }
 
-    public static void RegisterAuthorizers(Type callerType)
-        => RegisterAuthorizers(callerType?.Namespace);
-
-    /// <summary>
-    /// 扫描指定命名空间下所有实现 ICallerAuthorize 的类型。
-    /// </summary>
-    private static List<Type> GetAuthorizeTypes(string? targetNamespace)
+    public static void RaiseEvent(MulticastDelegate? eventDelegate, CallerContext context, Exception ex)
     {
-        var baseType = typeof(ICallerAuthorize);
-
-        // 建议缓存，防止频繁扫描
-        var assemblies = AppDomain.CurrentDomain
-            .GetAssemblies()
-            .Where(a =>
-                !a.IsDynamic &&
-                a.FullName is not null &&
-                !a.FullName.StartsWith("System", StringComparison.Ordinal) &&
-                !a.FullName.StartsWith("Microsoft", StringComparison.Ordinal) &&
-                !a.FullName.StartsWith("netstandard", StringComparison.Ordinal))
-            .ToList();
-
-        var result = new List<Type>(capacity: 64);
-
-        foreach (var asm in assemblies)
+        var delegates = eventDelegate?.GetInvocationList();
+        if (delegates == null)
         {
-            foreach (var type in SafeGetTypes(asm))
-            {
-                if (type is null ||
-                    type.IsInterface ||
-                    type.IsAbstract ||
-                    !baseType.IsAssignableFrom(type))
-                {
-                    continue;
-                }
-
-                if (string.IsNullOrEmpty(targetNamespace) ||
-                    (type.Namespace?.StartsWith(targetNamespace, StringComparison.Ordinal) ?? false))
-                {
-                    result.Add(type);
-                }
-            }
+            return;
         }
 
-        return result;
+        foreach (var handler in delegates)
+        {
+            try
+            {
+                handler.DynamicInvoke(context, ex);
+            }
+            catch
+            {
+            }
+        }
     }
 
-    private static IEnumerable<Type> SafeGetTypes(Assembly assembly)
+    private static ApiResult? SafeGetCache(MulticastDelegate? eventDelegate, CallerContext context)
     {
+        if (eventDelegate == null)
+        {
+            return null;
+        }
+
         try
         {
-            return assembly.GetTypes();
+            // 这里只有一个返回值，取最后一个非 null 的结果
+            var delegates = eventDelegate.GetInvocationList();
+            foreach (var d in delegates)
+            {
+                try
+                {
+                    if (d.DynamicInvoke(context) is ApiResult result)
+                    {
+                        return result;
+                    }
+                }
+                catch
+                {
+                }
+            }
         }
-        catch (ReflectionTypeLoadException ex)
+        catch
         {
-            // 打印缺失依赖信息，方便调试
-            var missing = ex.LoaderExceptions
-                .OfType<FileNotFoundException>()
-                .Select(e => e.FileName)
-                .Distinct();
-
-            Console.Error.WriteLine($"[Authorize] {assembly.GetName().Name} 类型加载不完整: {string.Join(", ", missing)}");
-
-            return ex.Types.Where(t => t != null)!;
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Authorize] 无法加载程序集 {assembly.GetName().Name}: {ex.Message}");
-            return [];
-        }
+
+        return null;
     }
+    #endregion
 }
