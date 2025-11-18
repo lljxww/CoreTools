@@ -17,12 +17,19 @@ public partial class DbContext(string connectionString, DbType dbType = DbType.M
             throw new Exception("AAMSContext未初始化");
         }
 
-        SqlSugarClient db = new(new ConnectionConfig()
+        var connectionConfig = new ConnectionConfig()
         {
             ConnectionString = _connectionString,
             DbType = dbType,
             IsAutoCloseConnection = true,
-        });
+        };
+
+        if (CustomConfigureExternalService != null)
+        {
+            connectionConfig.ConfigureExternalServices = CustomConfigureExternalService;
+        }
+
+        SqlSugarClient db = new(connectionConfig);
 
         // 配置加密解密
         if (DataExecuting != null)

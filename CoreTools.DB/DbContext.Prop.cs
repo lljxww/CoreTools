@@ -65,5 +65,12 @@ public partial class DbContext
     {
         DataExecuted = action;
     }
+
+    private static ConfigureExternalServices? CustomConfigureExternalService = null;
+
+    public static void SetConfigureExternalServices(ConfigureExternalServices services)
+    {
+        CustomConfigureExternalService = services;
+    }
     #endregion
 }
