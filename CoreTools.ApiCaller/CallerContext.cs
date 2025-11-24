@@ -348,6 +348,7 @@ CoreTools.ApiCaller:
 |> TIME: {DateTime.Now:yyyy/MM/dd HH:mm:ss}
 |> METHOD: {ServiceItem.Label}.{ApiItem.Label}
 |> USE CAMEL CASE: {ServiceItem.UseCamelCase}
+|> REQUEST_OPTION: {(RequestOption == null ? "null" : JsonSerializer.Serialize(RequestOption))}
 |> URL: {HttpMethod} {FinalUrl}
 |> PARAM: {paramJson}
 |> PARAM TYPE: {ApiItem?.ParamType}

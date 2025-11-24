@@ -1,4 +1,6 @@
-﻿namespace CoreTools.ApiCaller.Models;
+﻿using System.Text.Json.Serialization;
+
+namespace CoreTools.ApiCaller.Models;
 
 public class RequestOption
 {
@@ -15,6 +17,7 @@ public class RequestOption
     /// <summary>
     /// 当此predicate值为true时, 不将结果写入Cache
     /// </summary>
+    [JsonIgnore]
     public Predicate<CallerContext> WhenDontSaveRequestCache { get; set; } = _ => false;
 
     /// <summary>
@@ -25,11 +28,13 @@ public class RequestOption
     /// <summary>
     /// 自定义URL配置
     /// </summary>
+    [JsonIgnore]
     public Func<string, string>? CustomFinalUrlHandler { get; set; }
 
     /// <summary>
     /// 自定义请求体
     /// </summary>
+    [JsonIgnore]
     public HttpContent? CustomHttpContent { get; set; }
 
     /// <summary>
@@ -37,20 +42,19 @@ public class RequestOption
     /// </summary>
     public string? CustomAuthorizeInfo { get; set; }
 
-    private int _timeout = 40000;
-
     /// <summary>
     /// 超时时长（ms），超过此时间的请求将取消
     /// </summary>
     public int Timeout
     {
-        get => _timeout;
-        set => _timeout = value <= 0 ? 40000 : value;
-    }
+        get;
+        set => field = value <= 0 ? 40000 : value;
+    } = 40000;
 
     /// <summary>
     /// 自定义对象, 可用于将请求时的一些细节传递到各类事件处理程序中使用
     /// </summary>
+    [JsonIgnore]
     public object? CustomObject { get; set; }
 
     /// <summary>
