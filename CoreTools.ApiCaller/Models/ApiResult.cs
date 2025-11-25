@@ -11,9 +11,6 @@ public class ApiResult : IDisposable
     private bool isSet = false;
     private bool success;
     private int? code;
-    private string message = string.Empty;
-    private string rawStr = string.Empty;
-
     private JsonDocument? jsonObject;
 
     public ApiResult() { }
@@ -26,7 +23,7 @@ public class ApiResult : IDisposable
     public ApiResult(bool success, string message)
     {
         this.success = success;
-        this.message = message;
+        Message = message;
         this.isSet = true;
     }
 
@@ -58,17 +55,17 @@ public class ApiResult : IDisposable
     /// </summary>
     public string RawStr
     {
-        get => rawStr;
+        get;
         set
         {
-            rawStr = value;
+            field = value;
             jsonObject?.Dispose();
             jsonObject = null;
             isSet = false;
             code = null;
-            message = string.Empty;
+            Message = string.Empty;
         }
-    }
+    } = string.Empty;
 
     /// <summary>
     /// 执行信息
@@ -77,15 +74,15 @@ public class ApiResult : IDisposable
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(message))
+            if (string.IsNullOrWhiteSpace(field))
             {
-                message = this[nameof(Message)] ?? string.Empty;
+                field = this[nameof(Message)] ?? string.Empty;
             }
 
-            return message;
+            return field;
         }
-        set => message = value;
-    }
+        set;
+    } = string.Empty;
 
     /// <summary>
     /// 返回状态码，默认 -1
@@ -116,14 +113,14 @@ public class ApiResult : IDisposable
                 return jsonObject;
             }
 
-            if (string.IsNullOrWhiteSpace(rawStr))
+            if (string.IsNullOrWhiteSpace(RawStr))
             {
                 return null;
             }
 
             try
             {
-                jsonObject = JsonDocument.Parse(rawStr, new JsonDocumentOptions
+                jsonObject = JsonDocument.Parse(RawStr, new JsonDocumentOptions
                 {
                     AllowTrailingCommas = true,
                     CommentHandling = JsonCommentHandling.Skip
@@ -149,7 +146,7 @@ public class ApiResult : IDisposable
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(propertyName) || string.IsNullOrWhiteSpace(rawStr))
+            if (string.IsNullOrWhiteSpace(propertyName) || string.IsNullOrWhiteSpace(RawStr))
             {
                 return string.Empty;
             }
@@ -198,17 +195,23 @@ public class ApiResult : IDisposable
     /// </summary>
     public T? TryConvert<T>(T? defaultValue = default)
     {
-        if (string.IsNullOrWhiteSpace(rawStr))
+        if (string.IsNullOrWhiteSpace(RawStr))
         {
             return defaultValue;
         }
 
         try
         {
-            return JsonSerializer.Deserialize<T>(rawStr, JsonSetting.DEFAULT_SERIALIZER_OPTION);
+            return JsonSerializer.Deserialize<T>(RawStr, JsonSetting.DEFAULT_SERIALIZER_OPTION);
         }
-        catch
+        catch (Exception ex)
         {
+            if (string.Equals(CallerOption.RunEnv, "Development"))
+            {
+                Console.WriteLine($"[Caller] TryConvert Error: {ex.Message}");
+                Console.WriteLine($"[Caller] TryConvert Error: {ex.StackTrace}");
+            }
+
             return defaultValue;
         }
     }
@@ -268,8 +271,14 @@ public class ApiResult : IDisposable
             result = (T)Convert.ChangeType(input, targetType);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            if (string.Equals(CallerOption.RunEnv, "Development"))
+            {
+                Console.WriteLine($"[Caller] TryConvert Error: {ex.Message}");
+                Console.WriteLine($"[Caller] TryConvert Error: {ex.StackTrace}");
+            }
+
             return false;
         }
     }
@@ -304,17 +313,7 @@ public class ApiResult : IDisposable
     private bool TryGetValueAsBool(string propertyName)
     {
         var str = this[propertyName];
-        if (bool.TryParse(str, out var val))
-        {
-            return val;
-        }
-
-        if (int.TryParse(str, out var intVal))
-        {
-            return intVal != 0;
-        }
-
-        return false;
+        return bool.TryParse(str, out var val) ? val : int.TryParse(str, out var intVal) && intVal != 0;
     }
 
     /// <summary>

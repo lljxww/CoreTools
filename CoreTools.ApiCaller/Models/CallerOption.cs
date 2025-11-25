@@ -9,7 +9,9 @@ public static class CallerOption
     internal static readonly Dictionary<string, Func<CallerContext, CallerContext>> AuthorizeFuncs = [];
 
     public static void RegisterAuthorizers(Type callerType)
-        => RegisterAuthorizers(callerType?.Namespace);
+    {
+        RegisterAuthorizers(callerType?.Namespace);
+    }
 
     /// <summary>
     /// 自动扫描并注册所有 ICallerAuthorize 实现类
@@ -31,22 +33,22 @@ public static class CallerOption
 
                 if (string.IsNullOrWhiteSpace(name))
                 {
-                    Console.Error.WriteLine($"[Authorize] 类型 {type.FullName} 返回了空的授权名称，已跳过。");
+                    Console.Error.WriteLine($"[Caller] 类型 {type.FullName} 返回了空的授权名称，已跳过。");
                     continue;
                 }
 
                 if (AuthorizeFuncs.ContainsKey(name))
                 {
-                    Console.Error.WriteLine($"[Authorize] 重复的授权名称: {name} 来自 {type.FullName}，已忽略。");
+                    Console.Error.WriteLine($"[Caller] 重复的授权名称: {name} 来自 {type.FullName}，已忽略。");
                     continue;
                 }
 
                 AuthorizeFuncs[name] = instance.Func;
-                Console.WriteLine($"[Authorize] 已注册: {name} -> {type.FullName}");
+                Console.WriteLine($"[Caller] 已注册: {name} -> {type.FullName}");
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[Authorize] 注册 {type.FullName} 时出错: {ex.Message}");
+                Console.Error.WriteLine($"[Caller] 注册 {type.FullName} 时出错: {ex.Message}");
             }
         }
     }
@@ -107,13 +109,13 @@ public static class CallerOption
                 .Select(e => e.FileName)
                 .Distinct();
 
-            Console.Error.WriteLine($"[Authorize] {assembly.GetName().Name} 类型加载不完整: {string.Join(", ", missing)}");
+            Console.Error.WriteLine($"[Caller] {assembly.GetName().Name} 类型加载不完整: {string.Join(", ", missing)}");
 
             return ex.Types.Where(t => t != null)!;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[Authorize] 无法加载程序集 {assembly.GetName().Name}: {ex.Message}");
+            Console.Error.WriteLine($"[Caller] 无法加载程序集 {assembly.GetName().Name}: {ex.Message}");
             return [];
         }
     }
